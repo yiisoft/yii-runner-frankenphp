@@ -16,6 +16,8 @@
 
 The package contains a bootstrap for running Yii3 applications using [FrankenPHP](https://frankenphp.dev/) worker mode.
 
+> Note: If you do not want to run Yii3 in worker mode, please use [yiisoft/yii-runner-http](https://github.com/yiisoft/yii-runner-http).
+
 ## Requirements
 
 - PHP 8.1 or higher.

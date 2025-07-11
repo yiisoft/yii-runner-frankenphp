@@ -14,7 +14,7 @@
 [![static analysis](https://github.com/yiisoft/yii-runner-frankenphp/workflows/static%20analysis/badge.svg)](https://github.com/yiisoft/yii-runner-frankenphp/actions?query=workflow%3A%22static+analysis%22)
 [![type-coverage](https://shepherd.dev/github/yiisoft/yii-runner-frankenphp/coverage.svg)](https://shepherd.dev/github/yiisoft/yii-runner-frankenphp)
 
-The package contains a bootstrap for running Yii3 applications using [FrankenPHP](https://frankenphp.dev/).
+The package contains a bootstrap for running Yii3 applications using [FrankenPHP](https://frankenphp.dev/) worker mode.
 
 ## Requirements
 

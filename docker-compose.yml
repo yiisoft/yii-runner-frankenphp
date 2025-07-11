@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  yii-runner-frankenphp:
+    container_name: yii-runner-frankenphp
+    hostname: yii-runner-frankenphp
+    build:
+      context: .
+      dockerfile: tests/Docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.1}
+    volumes:
+      - .:/app

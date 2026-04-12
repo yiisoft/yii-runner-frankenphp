@@ -184,7 +184,7 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
 
         $maxRequests = (int)($_SERVER['MAX_REQUESTS'] ?? 0);
 
-        for ($nbRequests = 0; !$maxRequests || $nbRequests < $maxRequests; ++$nbRequests) {
+        for ($requestCount = 0; !$maxRequests || $requestCount < $maxRequests; ++$requestCount) {
             if (!$this->isInWorkerMode) {
                 $handler();
                 break;

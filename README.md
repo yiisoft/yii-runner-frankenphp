@@ -143,6 +143,13 @@ for classic non-worker mode only.
 
 Don't forget to rebuild images with new configuration files using `make build`.
 
+### Worker mode notes
+
+You can configure the maximum number of requests to handle by setting the `MAX_REQUESTS` environment variable.
+
+When using worker mode, make sure stateful services are reset after each request. For resetters configuration, see
+[Yii DI `StateResetter` documentation](https://github.com/yiisoft/di#resetting-services-state).
+
 ### Additional configuration
 
 By default, the `FrankenPHPApplicationRunner` is configured to work with Yii application templates and follows the

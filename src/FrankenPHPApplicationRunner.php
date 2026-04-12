@@ -8,7 +8,6 @@ use ErrorException;
 use JsonException;
 use LogicException;
 use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -178,7 +177,7 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
             }
 
             $emitter->emit($response);
-            $this->afterRespond($application, $container, $response);
+            $this->afterRespond($application, $response);
             return true;
         };
 
@@ -246,13 +245,12 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
 
     private function afterRespond(
         Application $application,
-        ContainerInterface $container,
         ?ResponseInterface $response,
     ): void
     {
         $application->afterEmit($response);
         /** @psalm-suppress MixedMethodCall */
-        $container
+        $this->getContainer()
             ->get(StateResetter::class)
             ->reset(); // We should reset the state of such services every request.
         gc_collect_cycles();

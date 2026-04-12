@@ -1,5 +1,6 @@
 {
     "symbol-whitelist" : [
-        "getallheaders"
+        "getallheaders",
+        "frankenphp_handle_request"
     ]
 }

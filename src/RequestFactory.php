@@ -29,13 +29,13 @@ use function ucwords;
  *
  * @internal
  */
-final readonly class RequestFactory
+final class RequestFactory
 {
     public function __construct(
-        private ServerRequestFactoryInterface $serverRequestFactory,
-        private UriFactoryInterface $uriFactory,
-        private UploadedFileFactoryInterface $uploadedFileFactory,
-        private StreamFactoryInterface $streamFactory,
+        private readonly ServerRequestFactoryInterface $serverRequestFactory,
+        private readonly UriFactoryInterface $uriFactory,
+        private readonly UploadedFileFactoryInterface $uploadedFileFactory,
+        private readonly StreamFactoryInterface $streamFactory,
     ) {
     }
 

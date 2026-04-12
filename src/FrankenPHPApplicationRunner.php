@@ -203,8 +203,6 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
      * Runs the application and gets the response instead of emitting it.
      * This method is useful for testing purposes or when you want to handle the response.
      *
-     * Note that it bypass the worker mode entirely.
-     *
      * @param ServerRequestInterface|null $request The server request to handle (optional).
      * @throws CircularReferenceException|ErrorException|HeadersHaveBeenSentException|InvalidConfigException
      * @throws ContainerExceptionInterface|NotFoundException|NotFoundExceptionInterface|NotInstantiableException

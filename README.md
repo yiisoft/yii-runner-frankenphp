@@ -14,9 +14,10 @@
 [![static analysis](https://github.com/yiisoft/yii-runner-frankenphp/workflows/static%20analysis/badge.svg)](https://github.com/yiisoft/yii-runner-frankenphp/actions?query=workflow%3A%22static+analysis%22)
 [![type-coverage](https://shepherd.dev/github/yiisoft/yii-runner-frankenphp/coverage.svg)](https://shepherd.dev/github/yiisoft/yii-runner-frankenphp)
 
-The package contains a bootstrap for running Yii3 applications using [FrankenPHP](https://frankenphp.dev/) worker mode.
+The package contains a bootstrap for running Yii3 application using [FrankenPHP](https://frankenphp.dev/) worker mode.
 
-> Note: If you do not want to run Yii3 in worker mode, please use [yiisoft/yii-runner-http](https://github.com/yiisoft/yii-runner-http) which is default for [yiisoft/app](https://github.com/yiisoft/app) and [yiisoft/app-api](https://github.com/yiisoft/app-api).
+> [!NOTE]
+> If you do not want to run Yii3 in worker mode, please use [yiisoft/yii-runner-http](https://github.com/yiisoft/yii-runner-http) which is default for [yiisoft/app](https://github.com/yiisoft/app) and [yiisoft/app-api](https://github.com/yiisoft/app-api).
 
 ## Requirements
 
@@ -42,7 +43,7 @@ declare(strict_types=1);
 use App\Environment;
 use Psr\Log\LogLevel;
 use Yiisoft\ErrorHandler\ErrorHandler;
-use Yiisoft\ErrorHandler\Renderer\HtmlRenderer;
+use Yiisoft\ErrorHandler\Renderer\PlainTextRenderer;
 use Yiisoft\Log\Logger;
 use Yiisoft\Log\StreamTarget;
 use Yiisoft\Yii\Runner\FrankenPHP\FrankenPHPApplicationRunner;
@@ -73,7 +74,7 @@ $runner = new FrankenPHPApplicationRunner(
                 ]),
             ],
         ),
-        new HtmlRenderer(),
+        new PlainTextRenderer(),
     ),
 );
 $runner->run();
@@ -134,7 +135,8 @@ For development it would be `docker/dev/Caddyfile`:
 }
 ```
 
-Development configuration has `watch` directive that makes FrankenPHP to reload changes when `.php` files are edited so you don't have to restart it manually.
+Development configuration has `watch` directive that makes FrankenPHP to reload changes when `.php` files are edited 
+so you don't have to restart it manually.
 
 Feel free to delete `public/index.php` and remove `yiisoft/yii-runner-http` from your `composer.json`. These are used
 for classic non-worker mode only.
@@ -186,8 +188,8 @@ reverse and recursive merge events' configurations.
 
 `$configMergePlanFile` — the relative path from `$configDirectory` to merge plan.
 
-`$temporaryErrorHandler` — a temporary error handler that is needed to handle creating of configuration and container 
-instances.
+`$temporaryErrorHandler` — A temporary error handler is needed to handle the creation of configuration and
+container instances, then the error handler configured in your application configuration will be used.
 
 `$emitter` — an emitter to send the response.
 
@@ -216,42 +218,6 @@ of the `Psr\Container\ContainerInterface`:
 $runner = $runner->withContainer($container);
 ```
 
-In addition to the error handler that is defined in the container, the runner uses a temporary error handler.
-A temporary error handler is needed to handle the creation of configuration and container instances,
-then the error handler configured in your application configuration will be used.
-
-By default, the temporary error handler uses HTML renderer and logs to stdout. You can override this as follows:
-
-```php
-/**
- * @var Psr\Log\LoggerInterface $logger
- * @var Yiisoft\ErrorHandler\Renderer\PlainTextRenderer $renderer
- * @var Yiisoft\Yii\Runner\FrankenPHP\FrankenPHPApplicationRunner $runner
- */
-
-$runner = $runner->withTemporaryErrorHandler(
-    new Yiisoft\ErrorHandler\ErrorHandler($logger, $renderer),
-);
-```
-
-The built-in default is equivalent to:
-
-```php
-$runner = $runner->withTemporaryErrorHandler(
-    new Yiisoft\ErrorHandler\ErrorHandler(
-        new Yiisoft\Log\Logger([
-            new Yiisoft\Log\StreamTarget('php://stdout'),
-        ]),
-        new Yiisoft\ErrorHandler\Renderer\HtmlRenderer(),
-    ),
-);
-```
-
-## Testing
-
-### Unit testing
-
-The package is tested with [PHPUnit](https://phpunit.de/). To run tests:
 ## Documentation
 
 - [Internals](docs/internals.md)

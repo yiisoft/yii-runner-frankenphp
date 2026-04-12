@@ -172,15 +172,14 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
                 $response = $application->handle($request);
             } catch (Throwable $throwable) {
                 $handler = new ThrowableHandler($throwable);
-                /** @psalm-suppress MixedMethodCall */
-                $response = $container
-                    ->get(ErrorCatcher::class)
-                    ->process($request, $handler);
-            } finally {
-                $emitter->emit($response);
-                $this->afterRespond($application, $container, $response);
-                return true;
+                /** @var ErrorCatcher $errorCatcher */
+                $errorCatcher = $container->get(ErrorCatcher::class);
+                $response = $errorCatcher->process($request, $handler);
             }
+
+            $emitter->emit($response);
+            $this->afterRespond($application, $container, $response);
+            return true;
         };
 
 

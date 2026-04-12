@@ -124,6 +124,16 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $runner->run();
     }
 
+    public function testRunRethrowsWhenErrorResponseCreationFails(): void
+    {
+        $runner = $this->runner->withContainer($this->createContainer(true, true));
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('Failure while creating error response');
+
+        $runner->run();
+    }
+
     public function testConfigMergePlanFile(): void
     {
         $runner = new FrankenPHPApplicationRunner(
@@ -217,10 +227,13 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $this->expectOutputString('');
     }
 
-    private function createContainer(bool $throwException = false): ContainerInterface
+    private function createContainer(
+        bool $throwException = false,
+        bool $throwOnErrorResponseCreation = false,
+    ): ContainerInterface
     {
         $containerConfig = ContainerConfig::create()
-            ->withDefinitions($this->createDefinitions($throwException));
+            ->withDefinitions($this->createDefinitions($throwException, $throwOnErrorResponseCreation));
         return new Container($containerConfig);
     }
 
@@ -229,7 +242,7 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         return new Config(new ConfigPaths(__DIR__ . '/Support', 'config'), paramsGroup: 'params-web');
     }
 
-    private function createDefinitions(bool $throwException): array
+    private function createDefinitions(bool $throwException, bool $throwOnErrorResponseCreation): array
     {
         return [
             EventDispatcherInterface::class => SimpleEventDispatcher::class,
@@ -241,10 +254,19 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
             UriFactoryInterface::class => UriFactory::class,
             UploadedFileFactoryInterface::class => UploadedFileFactory::class,
 
-            ThrowableResponseFactoryInterface::class => [
-                'class' => ThrowableResponseFactory::class,
-                'forceContentType()' => ['text/plain'],
-            ],
+            ThrowableResponseFactoryInterface::class => $throwOnErrorResponseCreation
+                ? static fn() => new class () implements ThrowableResponseFactoryInterface {
+                    public function create(
+                        \Throwable $throwable,
+                        ServerRequestInterface $request
+                    ): ResponseInterface {
+                        throw new Exception('Failure while creating error response', previous: $throwable);
+                    }
+                }
+                : [
+                    'class' => ThrowableResponseFactory::class,
+                    'forceContentType()' => ['text/plain'],
+                ],
 
             Application::class => [
                 '__construct()' => [

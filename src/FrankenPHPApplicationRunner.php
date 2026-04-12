@@ -42,6 +42,8 @@ ignore_user_abort(true);
 final class FrankenPHPApplicationRunner extends ApplicationRunner
 {
     private readonly EmitterInterface $emitter;
+    private ?FakeEmitter $fakeEmitter = null;
+    private bool $isInWorkerMode;
 
     /**
      * @param string $rootPath The absolute path to the project root.
@@ -91,10 +93,12 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
         string $configDirectory = 'config',
         string $vendorDirectory = 'vendor',
         string $configMergePlanFile = '.merge-plan.php',
-        private ?ErrorHandler $temporaryErrorHandler = null,
+        private readonly ?ErrorHandler $temporaryErrorHandler = null,
         ?EmitterInterface $emitter = null,
     ) {
         $this->emitter = $emitter ?? new SapiEmitter();
+
+        $this->isInWorkerMode = function_exists('frankenphp_handle_request');
 
         parent::__construct(
             $rootPath,
@@ -125,6 +129,15 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
      */
     public function run(): void
     {
+        $this->runInternal($this->emitter);
+    }
+
+    /**
+     * @throws CircularReferenceException|ErrorException|HeadersHaveBeenSentException|InvalidConfigException
+     * @throws ContainerExceptionInterface|NotFoundException|NotFoundExceptionInterface|NotInstantiableException
+     */
+    private function runInternal(EmitterInterface $emitter, ?ServerRequestInterface $request = null): void
+    {
         // Register temporary error handler to catch error while the container is building.
         $temporaryErrorHandler = $this->createTemporaryErrorHandler();
         $this->registerErrorHandler($temporaryErrorHandler);
@@ -146,11 +159,14 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
         /** @var RequestFactory $requestFactory */
         $requestFactory = $container->get(RequestFactory::class);
 
-        $handler = function () use ($application, $container, $requestFactory): bool {
+        $handler = function () use ($application, $container, $requestFactory, $emitter, $request): bool {
             $startTime = microtime(true);
 
-            $request = $requestFactory->create()
-                ->withAttribute('applicationStartTime', $startTime);
+            if ($request === null) {
+                $request = $requestFactory->create();
+            }
+
+            $request = $request->withAttribute('applicationStartTime', $startTime);
 
             try {
                 $response = $application->handle($request);
@@ -165,7 +181,7 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
                     ->process($request, $handler);
 
             } finally {
-                $this->emitter->emit($response);
+                $emitter->emit($response);
                 $this->afterRespond($application, $container, $response);
                 return true;
             }
@@ -175,6 +191,11 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
         $maxRequests = (int)($_SERVER['MAX_REQUESTS'] ?? 0);
 
         for ($nbRequests = 0; !$maxRequests || $nbRequests < $maxRequests; ++$nbRequests) {
+            if (!$this->isInWorkerMode) {
+                $handler();
+                break;
+            }
+
             $keepRunning = frankenphp_handle_request($handler);
             if (!$keepRunning) {
                 break;
@@ -197,56 +218,11 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
      */
     public function runAndGetResponse(?ServerRequestInterface $request = null): ResponseInterface
     {
-        $startTime = microtime(true);
-
-        // Register temporary error handler to catch error while container is building.
-        $temporaryErrorHandler = $this->createTemporaryErrorHandler();
-        $this->registerErrorHandler($temporaryErrorHandler);
-
-        $container = $this->getContainer();
-
-        /**
-         * Register error handler with real container-configured dependencies.
-         * @var ErrorHandler $actualErrorHandler
-         */
-        $actualErrorHandler = $container->get(ErrorHandler::class);
-        $this->registerErrorHandler($actualErrorHandler, $temporaryErrorHandler);
-
-        $this->runBootstrap();
-        $this->checkEvents();
-
-        /** @var Application $application */
-        $application = $container->get(Application::class);
-
-        if ($request === null) {
-            /** @var RequestFactory $requestFactory */
-            $requestFactory = $container->get(RequestFactory::class);
-            $request = $requestFactory->create();
-        }
-
-        $request = $request->withAttribute('applicationStartTime', $startTime);
-        $emitter = new FakeEmitter();
-
-        try {
-            $application->start();
-            $response = $application->handle($request);
-            $emitter->emit($response);
-        } catch (Throwable $throwable) {
-            $handler = new ThrowableHandler($throwable);
-            /**
-             * @var ResponseInterface
-             * @psalm-suppress MixedMethodCall
-             */
-            $response = $container
-                ->get(ErrorCatcher::class)
-                ->process($request, $handler);
-            $emitter->emit($response);
-        } finally {
-            $application->afterEmit($response ?? null);
-            $application->shutdown();
-        }
-
-        return $emitter->getLastResponse()
+        $this->runInternal(
+            $this->fakeEmitter ??= new FakeEmitter(),
+            $request,
+        );
+        return $this->fakeEmitter->getLastResponse()
             ?? throw new LogicException('No response was emitted.');
     }
 

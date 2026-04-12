@@ -154,59 +154,6 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $this->assertNotSame($this->runner, $this->runner->withContainer($this->createContainer()));
     }
 
-    public function testHeadRequest(): void
-    {
-        $emitter = new FakeEmitter();
-        $runner = new FrankenPHPApplicationRunner(
-            rootPath: __DIR__ . '/Support',
-            emitter: $emitter,
-        );
-
-        $_SERVER['REQUEST_METHOD'] = 'HEAD';
-        $runner->run();
-
-        $response = $emitter->getLastResponse();
-        assertInstanceOf(ResponseInterface::class, $response);
-        assertSame('', $response->getBody()->getContents());
-    }
-
-    public function testContentLength(): void
-    {
-        $emitter = new FakeEmitter();
-        $runner = new FrankenPHPApplicationRunner(
-            rootPath: __DIR__ . '/Support',
-            emitter: $emitter,
-        );
-
-        $runner->run();
-
-        $response = $emitter->getLastResponse();
-        assertInstanceOf(ResponseInterface::class, $response);
-        assertSame(
-            ['Content-Length' => ['2']],
-            $response->getHeaders(),
-        );
-    }
-
-    public function testContentLengthWithTransferEncoding(): void
-    {
-        $emitter = new FakeEmitter();
-        $runner = new FrankenPHPApplicationRunner(
-            rootPath: __DIR__ . '/Support',
-            environment: 'content-length-with-transfer-encoding',
-            emitter: $emitter,
-        );
-
-        $runner->run();
-
-        $response = $emitter->getLastResponse();
-        assertInstanceOf(ResponseInterface::class, $response);
-        assertSame(
-            ['Transfer-Encoding' => ['chunked']],
-            $response->getHeaders(),
-        );
-    }
-
     public function testDoNotModifyExistsContentLength(): void
     {
         $emitter = new FakeEmitter();

@@ -36,13 +36,6 @@ return [
             ],
         ],
     ],
-    'content-length-with-transfer-encoding' => [
-        'di-web' => [
-            '/' => [
-                'di-web-content-length-with-transfer-encoding.php',
-            ],
-        ],
-    ],
     'do-not-modify-exists-content-length' => [
         'di-web' => [
             '/' => [

@@ -82,7 +82,7 @@ $runner->run();
 
 Then edit `Caddyfile`s. For production it would be `docker/Caddyfile`:
 
-```
+```caddyfile
 # Production mode config
 # https://frankenphp.dev/docs/config
 # https://caddyserver.com/docs/caddyfile
@@ -109,7 +109,7 @@ Then edit `Caddyfile`s. For production it would be `docker/Caddyfile`:
 
 For development it would be `docker/dev/Caddyfile`:
 
-```
+```caddyfile
 # Development mode config
 # https://frankenphp.dev/docs/config
 # https://caddyserver.com/docs/caddyfile

@@ -11,6 +11,7 @@ use HttpSoft\Message\UriFactory;
 use PHPUnit\Framework\Attributes\BackupGlobals;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Message\StreamFactoryInterface;
 use RuntimeException;
 use Yiisoft\Yii\Runner\FrankenPHP\RequestFactory;
 
@@ -71,6 +72,51 @@ final class RequestFactoryTest extends TestCase
         $this->assertSame($thirdFileName, $thirdUploadedFile->getClientFilename());
     }
 
+    public function testUploadedFilesFallbackToEmptyStreamWhenTemporaryFileIsUnavailable(): void
+    {
+        $_SERVER = [
+            'HTTP_HOST' => 'test',
+            'REQUEST_METHOD' => 'GET',
+        ];
+        $_FILES = [
+            'file1' => [
+                'name' => 'facepalm.jpg',
+                'type' => 'image/jpeg',
+                'tmp_name' => '/non-existent-file',
+                'error' => '0',
+                'size' => '463',
+            ],
+        ];
+
+        $streamFactory = $this->createMock(StreamFactoryInterface::class);
+        $streamFactory
+            ->expects($this->once())
+            ->method('createStreamFromFile')
+            ->with('/non-existent-file')
+            ->willThrowException(new RuntimeException('Temporary file is unavailable.'));
+        $streamFactory
+            ->expects($this->once())
+            ->method('createStream')
+            ->with('')
+            ->willReturn((new StreamFactory())->createStream());
+
+        $requestFactory = new RequestFactory(
+            new ServerRequestFactory(),
+            new UriFactory(),
+            new UploadedFileFactory(),
+            $streamFactory,
+        );
+
+        $serverRequest = $requestFactory->create();
+
+        $uploadedFile = $serverRequest->getUploadedFiles()['file1'];
+        $this->assertSame('facepalm.jpg', $uploadedFile->getClientFilename());
+        $this->assertSame('image/jpeg', $uploadedFile->getClientMediaType());
+        $this->assertSame(463, $uploadedFile->getSize());
+        $this->assertSame(0, $uploadedFile->getError());
+        $this->assertSame('', (string) $uploadedFile->getStream());
+    }
+
     public function testHeadersParsing(): void
     {
         $_SERVER = [
@@ -91,6 +137,33 @@ final class RequestFactoryTest extends TestCase
         $request = $this->createRequestFactory()->create();
 
         $this->assertSame($expected, $request->getHeaders());
+    }
+
+    public static function ipv6AuthorityDataProvider(): array
+    {
+        return [
+            'withoutPort' => [
+                '[::1]',
+                'http://[::1]',
+            ],
+            'withPort' => [
+                '[::1]:8080',
+                'http://[::1]:8080',
+            ],
+        ];
+    }
+
+    #[DataProvider('ipv6AuthorityDataProvider')]
+    public function testIpv6HostIsFormattedAsUriAuthority(string $hostHeader, string $expectedUri): void
+    {
+        $_SERVER = [
+            'HTTP_HOST' => $hostHeader,
+            'REQUEST_METHOD' => 'GET',
+        ];
+
+        $request = $this->createRequestFactory()->create();
+
+        $this->assertSame($expectedUri, (string) $request->getUri());
     }
 
     public function testInvalidMethodException(): void

@@ -19,15 +19,37 @@ use function fopen;
 
 final class RequestFactoryTest extends TestCase
 {
+    public static array|false $getAllHeadersResult = false;
+
     private array $globalServer = [];
     private array $globalPost = [];
     private array $globalFiles = [];
+
+    public static function setUpBeforeClass(): void
+    {
+        if (!function_exists('getallheaders')) {
+            eval(<<<'PHP'
+namespace {
+    function getallheaders(): array|false
+    {
+        return \Yiisoft\Yii\Runner\FrankenPHP\Tests\RequestFactory\RequestFactoryTest::getAllHeadersStubResult();
+    }
+}
+PHP);
+        }
+    }
+
+    public static function getAllHeadersStubResult(): array|false
+    {
+        return self::$getAllHeadersResult;
+    }
 
     protected function setUp(): void
     {
         $this->globalServer = $_SERVER;
         $this->globalPost = $_POST;
         $this->globalFiles = $_FILES;
+        self::$getAllHeadersResult = false;
     }
 
     protected function tearDown(): void
@@ -137,6 +159,42 @@ final class RequestFactoryTest extends TestCase
         $request = $this->createRequestFactory()->create();
 
         $this->assertSame($expected, $request->getHeaders());
+    }
+
+    public function testHeadersParsingFallsBackWhenGetAllHeadersReturnsFalse(): void
+    {
+        self::$getAllHeadersResult = false;
+        $_SERVER = [
+            'HTTP_HOST' => 'example.com',
+            'CONTENT_TYPE' => 'text/plain',
+            'REQUEST_METHOD' => 'GET',
+        ];
+
+        $request = $this->createRequestFactory()->create();
+
+        $this->assertSame(
+            [
+                'Host' => ['example.com'],
+                'Content-Type' => ['text/plain'],
+            ],
+            $request->getHeaders(),
+        );
+    }
+
+    public function testHeadersAreTakenFromGetAllHeadersWhenAvailable(): void
+    {
+        self::$getAllHeadersResult = [
+            'X-Test' => 'header-value',
+            'X-Another' => 'another-value',
+        ];
+        $_SERVER = [
+            'REQUEST_METHOD' => 'GET',
+        ];
+
+        $request = $this->createRequestFactory()->create();
+
+        $this->assertSame(['header-value'], $request->getHeader('X-Test'));
+        $this->assertSame(['another-value'], $request->getHeader('X-Another'));
     }
 
     public static function ipv6AuthorityDataProvider(): array
@@ -503,6 +561,32 @@ final class RequestFactoryTest extends TestCase
         $this->assertSame($post, $request->getParsedBody());
     }
 
+    public function testPostBodyIsNotParsedForPrefixedFormUrlEncodedContentType(): void
+    {
+        $_SERVER = [
+            'REQUEST_METHOD' => 'POST',
+            'CONTENT_TYPE' => 'xapplication/x-www-form-urlencoded',
+        ];
+        $_POST = ['name' => 'test'];
+
+        $request = $this->createRequestFactory()->create();
+
+        $this->assertNull($request->getParsedBody());
+    }
+
+    public function testPostBodyIsNotParsedForPrefixedMultipartContentType(): void
+    {
+        $_SERVER = [
+            'REQUEST_METHOD' => 'POST',
+            'CONTENT_TYPE' => 'xmultipart/form-data',
+        ];
+        $_POST = ['name' => 'test'];
+
+        $request = $this->createRequestFactory()->create();
+
+        $this->assertNull($request->getParsedBody());
+    }
+
     public function testNotParseUJsonWithoutBody(): void
     {
         $_SERVER = [
@@ -527,6 +611,19 @@ final class RequestFactoryTest extends TestCase
         $request = $requestFactory->create($this->createResource('hello'));
 
         $this->assertNull($request->getParsedBody());
+    }
+
+    public function testMalformedHostWithLeadingNewlineIsNotParsedAsHostPortPair(): void
+    {
+        $_SERVER = [
+            'HTTP_HOST' => "\nexample.com:8080",
+            'REQUEST_METHOD' => 'GET',
+        ];
+
+        $request = $this->createRequestFactory()->create();
+
+        $this->assertSame("\nexample.com:8080", $request->getUri()->getHost());
+        $this->assertNull($request->getUri()->getPort());
     }
 
     private function createRequestFactory(): RequestFactory

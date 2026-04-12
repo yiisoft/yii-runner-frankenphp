@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Yiisoft\Yii\Runner\FrankenPHP\Tests;
 
 use Exception;
+use HttpSoft\Message\Response;
 use HttpSoft\Message\ResponseFactory;
 use HttpSoft\Message\ServerRequest;
 use HttpSoft\Message\ServerRequestFactory;
@@ -24,12 +25,16 @@ use Psr\Http\Message\UriFactoryInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Psr\Log\LoggerInterface;
+use ReflectionMethod;
+use ReflectionProperty;
 use Yiisoft\Config\Config;
+use Yiisoft\Config\ConfigInterface;
 use Yiisoft\Config\ConfigPaths;
 use Yiisoft\Definitions\DynamicReference;
 use Yiisoft\Definitions\Reference;
 use Yiisoft\Di\Container;
 use Yiisoft\Di\ContainerConfig;
+use Yiisoft\Di\StateResetter;
 use Yiisoft\ErrorHandler\ErrorHandler;
 use Yiisoft\ErrorHandler\Factory\ThrowableResponseFactory;
 use Yiisoft\ErrorHandler\Renderer\PlainTextRenderer;
@@ -42,6 +47,7 @@ use Yiisoft\PsrEmitter\FakeEmitter;
 use Yiisoft\Test\Support\EventDispatcher\SimpleEventDispatcher;
 use Yiisoft\Test\Support\Log\SimpleLogger;
 use Yiisoft\Yii\Http\Application;
+use Yiisoft\Yii\Event\InvalidEventConfigurationFormatException;
 use Yiisoft\Yii\Http\Event\AfterEmit;
 use Yiisoft\Yii\Http\Event\AfterRequest;
 use Yiisoft\Yii\Http\Event\ApplicationShutdown;
@@ -55,17 +61,50 @@ use function PHPUnit\Framework\assertSame;
 
 final class FrankenPHPApplicationRunnerTest extends TestCase
 {
+    public static int $frankenphpHandleRequestCalls = 0;
+    public static int $frankenphpHandleRequestKeepRunningUntil = 1;
+    public static bool $bootstrapExecuted = false;
+
     private FrankenPHPApplicationRunner $runner;
+
+    public static function setUpBeforeClass(): void
+    {
+        if (!function_exists('frankenphp_handle_request')) {
+            eval(<<<'PHP'
+namespace {
+    function frankenphp_handle_request(callable $handler): bool
+    {
+        return \Yiisoft\Yii\Runner\FrankenPHP\Tests\FrankenPHPApplicationRunnerTest::handleFrankenPhpRequest($handler);
+    }
+}
+PHP);
+        }
+    }
+
+    public static function handleFrankenPhpRequest(callable $handler): bool
+    {
+        self::$frankenphpHandleRequestCalls++;
+
+        return $handler() && self::$frankenphpHandleRequestCalls < self::$frankenphpHandleRequestKeepRunningUntil;
+    }
 
     public function setUp(): void
     {
         parent::setUp();
 
         $_SERVER['REQUEST_METHOD'] = 'GET';
+        self::$frankenphpHandleRequestCalls = 0;
+        self::$frankenphpHandleRequestKeepRunningUntil = 1;
+        self::$bootstrapExecuted = false;
         $this->runner = new FrankenPHPApplicationRunner(
             rootPath: __DIR__ . '/Support',
             debug: true
         );
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
     }
 
     public function testRun(): void
@@ -86,6 +125,22 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $this->expectOutputString('OK');
 
         $runner->run();
+    }
+
+    public function testConstructorDefaultsAreConfiguredAsExpected(): void
+    {
+        $runner = new FrankenPHPApplicationRunner(__DIR__ . '/Support');
+
+        $this->assertFalse($this->getPropertyValue($runner, 'debug', \Yiisoft\Yii\Runner\ApplicationRunner::class));
+        $this->assertFalse($this->getPropertyValue($runner, 'checkEvents', \Yiisoft\Yii\Runner\ApplicationRunner::class));
+        $this->assertSame(
+            ['params'],
+            $this->getPropertyValue($runner, 'nestedParamsGroups', \Yiisoft\Yii\Runner\ApplicationRunner::class),
+        );
+        $this->assertSame(
+            ['events'],
+            $this->getPropertyValue($runner, 'nestedEventsGroups', \Yiisoft\Yii\Runner\ApplicationRunner::class),
+        );
     }
 
     public function testRunWithCustomizedConfiguration(): void
@@ -120,6 +175,40 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $runner = $this->runner->withContainer($this->createContainer(true));
 
         $this->expectOutputRegex('/^Exception with message "Failure"/');
+
+        $runner->run();
+    }
+
+    public function testRunExecutesBootstrapCallbacks(): void
+    {
+        $runner = (new FrankenPHPApplicationRunner(__DIR__ . '/Support', false))
+            ->withContainer($this->createContainer())
+            ->withConfig($this->createStubConfig([
+                'bootstrap-web' => [
+                    static function (ContainerInterface $container): void {
+                        FrankenPHPApplicationRunnerTest::$bootstrapExecuted = $container instanceof ContainerInterface;
+                    },
+                ],
+            ]));
+
+        $runner->run();
+
+        $this->assertTrue(self::$bootstrapExecuted);
+    }
+
+    public function testRunChecksEventsConfigurationWhenEnabled(): void
+    {
+        $runner = (new FrankenPHPApplicationRunner(
+            rootPath: __DIR__ . '/Support',
+            debug: false,
+            checkEvents: true,
+        ))
+            ->withContainer($this->createContainer())
+            ->withConfig($this->createStubConfig([
+                'events-web' => ['not-an-event-class' => [static fn() => null]],
+            ]));
+
+        $this->expectException(InvalidEventConfigurationFormatException::class);
 
         $runner->run();
     }
@@ -227,6 +316,83 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $this->expectOutputString('');
     }
 
+    public function testRunAndGetResponseReusesFakeEmitter(): void
+    {
+        $runner = new FrankenPHPApplicationRunner(__DIR__ . '/Support', false);
+
+        $runner->runAndGetResponse();
+        $firstEmitter = $this->getPropertyValue($runner, 'fakeEmitter');
+
+        $runner->runAndGetResponse();
+        $secondEmitter = $this->getPropertyValue($runner, 'fakeEmitter');
+
+        $this->assertSame($firstEmitter, $secondEmitter);
+    }
+
+    public function testCreateTemporaryErrorHandlerReturnsInjectedInstance(): void
+    {
+        $temporaryErrorHandler = $this->createErrorHandler();
+        $runner = new FrankenPHPApplicationRunner(
+            rootPath: __DIR__ . '/Support',
+            temporaryErrorHandler: $temporaryErrorHandler,
+        );
+
+        $created = $this->invokeMethod($runner, 'createTemporaryErrorHandler');
+
+        $this->assertSame($temporaryErrorHandler, $created);
+    }
+
+    public function testWorkerModeRespectsMaxRequestsAndResetsStateBetweenRequests(): void
+    {
+        $_SERVER['MAX_REQUESTS'] = '2';
+        self::$frankenphpHandleRequestKeepRunningUntil = 5;
+
+        $emitter = new FakeEmitter();
+        $runner = new FrankenPHPApplicationRunner(
+            rootPath: __DIR__ . '/Support',
+            debug: false,
+            emitter: $emitter,
+        );
+        $runner = $runner->withContainer($this->createWorkerModeContainer());
+
+        $runner->run();
+
+        $response = $emitter->getLastResponse();
+        assertInstanceOf(ResponseInterface::class, $response);
+        $this->assertSame('1', (string) $response->getBody());
+        $this->assertSame(2, self::$frankenphpHandleRequestCalls);
+    }
+
+    public function testWorkerModeWithoutMaxRequestsContinuesUntilHandlerStops(): void
+    {
+        unset($_SERVER['MAX_REQUESTS']);
+        self::$frankenphpHandleRequestKeepRunningUntil = 2;
+
+        $runner = (new FrankenPHPApplicationRunner(
+            rootPath: __DIR__ . '/Support',
+            debug: false,
+        ))->withContainer($this->createWorkerModeContainer());
+
+        $runner->run();
+
+        $this->assertSame(2, self::$frankenphpHandleRequestCalls);
+    }
+
+    public function testWorkerModeCastsMaxRequestsToInt(): void
+    {
+        $_SERVER['MAX_REQUESTS'] = '2foo';
+        self::$frankenphpHandleRequestKeepRunningUntil = 5;
+
+        $runner = (new FrankenPHPApplicationRunner(
+            rootPath: __DIR__ . '/Support',
+            debug: false,
+        ))->withContainer($this->createWorkerModeContainer());
+
+        $runner->run();
+
+        $this->assertSame(2, self::$frankenphpHandleRequestCalls);
+    }
+
     private function createContainer(
         bool $throwException = false,
         bool $throwOnErrorResponseCreation = false,
@@ -240,6 +406,25 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
     private function createConfig(): Config
     {
         return new Config(new ConfigPaths(__DIR__ . '/Support', 'config'), paramsGroup: 'params-web');
+    }
+
+    private function createStubConfig(array $configurations): ConfigInterface
+    {
+        return new class ($configurations) implements ConfigInterface {
+            public function __construct(private readonly array $configurations)
+            {
+            }
+
+            public function has(string $group): bool
+            {
+                return array_key_exists($group, $this->configurations);
+            }
+
+            public function get(string $group): array
+            {
+                return $this->configurations[$group];
+            }
+        };
     }
 
     private function createDefinitions(bool $throwException, bool $throwOnErrorResponseCreation): array
@@ -300,8 +485,88 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         ];
     }
 
+    private function createWorkerModeContainer(): ContainerInterface
+    {
+        $containerConfig = ContainerConfig::create()->withDefinitions([
+            EventDispatcherInterface::class => SimpleEventDispatcher::class,
+            LoggerInterface::class => SimpleLogger::class,
+            ResponseFactoryInterface::class => ResponseFactory::class,
+            ServerRequestFactoryInterface::class => ServerRequestFactory::class,
+            StreamFactoryInterface::class => StreamFactory::class,
+            ThrowableRendererInterface::class => PlainTextRenderer::class,
+            UriFactoryInterface::class => UriFactory::class,
+            UploadedFileFactoryInterface::class => UploadedFileFactory::class,
+            'requestCounter' => static fn() => new class () {
+                public int $value = 0;
+            },
+
+            ThrowableResponseFactoryInterface::class => [
+                'class' => ThrowableResponseFactory::class,
+                'forceContentType()' => ['text/plain'],
+            ],
+
+            StateResetter::class => static function (ContainerInterface $container): StateResetter {
+                $resetter = new StateResetter($container);
+                $resetter->setResetters([
+                    'requestCounter' => function (): void {
+                        $this->value = 0;
+                    },
+                ]);
+
+                return $resetter;
+            },
+
+            'applicationMiddleware' => static fn(ContainerInterface $container) => new class (
+                $container->get('requestCounter')
+            ) implements MiddlewareInterface {
+                public function __construct(private readonly object $counter)
+                {
+                }
+
+                public function process(
+                    ServerRequestInterface $request,
+                    RequestHandlerInterface $handler
+                ): ResponseInterface {
+                    $this->counter->value++;
+
+                    return (new Response())->withBody(
+                        (new StreamFactory())->createStream((string) $this->counter->value)
+                    );
+                }
+            },
+
+            Application::class => [
+                '__construct()' => [
+                    'dispatcher' => DynamicReference::to(
+                        static fn(ContainerInterface $container) => $container
+                            ->get(MiddlewareDispatcher::class)
+                            ->withMiddlewares([
+                                static fn(ContainerInterface $container) => $container->get('applicationMiddleware'),
+                            ]),
+                    ),
+                    'fallbackHandler' => Reference::to(NotFoundHandler::class),
+                ],
+            ],
+        ]);
+
+        return new Container($containerConfig);
+    }
+
     private function createErrorHandler(): ErrorHandler
     {
         return new ErrorHandler(new SimpleLogger(), new PlainTextRenderer());
+    }
+
+    private function getPropertyValue(
+        object $object,
+        string $property,
+        string $class = FrankenPHPApplicationRunner::class,
+    ): mixed {
+        return (new ReflectionProperty($class, $property))->getValue($object);
+    }
+
+    private function invokeMethod(object $object, string $method, array $arguments = []): mixed
+    {
+        return (new ReflectionMethod($object, $method))->invokeArgs($object, $arguments);
     }
 }

@@ -2,7 +2,7 @@
     <a href="https://github.com/yiisoft" target="_blank">
         <img src="https://yiisoft.github.io/docs/images/yii_logo.svg" height="100px" alt="Yii">
     </a>
-    <h1 align="center">Yii FrankenPHP Runner</h1>
+    <h1 align="center">Yii FrankenPHP worker runner</h1>
     <br>
 </p>
 
@@ -16,11 +16,11 @@
 
 The package contains a bootstrap for running Yii3 applications using [FrankenPHP](https://frankenphp.dev/) worker mode.
 
-> Note: If you do not want to run Yii3 in worker mode, please use [yiisoft/yii-runner-http](https://github.com/yiisoft/yii-runner-http).
+> Note: If you do not want to run Yii3 in worker mode, please use [yiisoft/yii-runner-http](https://github.com/yiisoft/yii-runner-http) which is default for [yiisoft/app](https://github.com/yiisoft/app) and [yiisoft/app-api](https://github.com/yiisoft/app-api).
 
 ## Requirements
 
-- PHP 8.1 or higher.
+- PHP 8.1 - 8.5.
 
 ## Installation
 
@@ -32,41 +32,114 @@ composer require yiisoft/yii-runner-frankenphp
 
 ## General usage
 
-Create `worker.php` in your application root directory:
+In your application root create `worker.php`:
 
 ```php
+<?php
+
+declare(strict_types=1);
+
+use App\Environment;
+use Psr\Log\LogLevel;
+use Yiisoft\ErrorHandler\ErrorHandler;
+use Yiisoft\ErrorHandler\Renderer\HtmlRenderer;
+use Yiisoft\Log\Logger;
+use Yiisoft\Log\StreamTarget;
 use Yiisoft\Yii\Runner\FrankenPHP\FrankenPHPApplicationRunner;
 
-ini_set('display_errors', 'stderr');
+$root = __DIR__;
 
-require_once __DIR__ . '/autoload.php';
+require_once $root . '/src/bootstrap.php';
 
-(new FrankenPHPApplicationRunner(
-    rootPath: __DIR__, 
-    debug: $_ENV['YII_DEBUG'], 
-    checkEvents: $_ENV['YII_DEBUG'], 
-    environment: $_ENV['YII_ENV']
-))->run();
+if (Environment::appC3()) {
+    $c3 = $root . '/c3.php';
+    if (file_exists($c3)) {
+        require_once $c3;
+    }
+}
+
+$runner = new FrankenPHPApplicationRunner(
+    rootPath: $root,
+    debug: Environment::appDebug(),
+    checkEvents: Environment::appDebug(),
+    environment: Environment::appEnv(),
+    temporaryErrorHandler: new ErrorHandler(
+        new Logger(
+            [
+                (new StreamTarget())->setLevels([
+                    LogLevel::EMERGENCY,
+                    LogLevel::ERROR,
+                    LogLevel::WARNING,
+                ]),
+            ],
+        ),
+        new HtmlRenderer(),
+    ),
+);
+$runner->run();
 ```
 
+Then edit `Caddyfile`s. For production it would be `docker/Caddyfile`:
 
-Run FrankenPHP with the specified config [using Docker](https://frankenphp.dev/docs/docker/):
+```
+# Production mode config
+# https://frankenphp.dev/docs/config
+# https://caddyserver.com/docs/caddyfile
 
-```sh
-docker run \
-    -e FRANKENPHP_CONFIG="worker /app/path/to/your/worker.php" \
-    -v $PWD:/app \
-    -p 80:80 -p 443:443 -p 443:443/udp \
-    dunglas/frankenphp
+{
+	skip_install_trust
+
+	frankenphp {
+
+	}
+}
+
+{$SERVER_NAME::80} {
+	encode zstd br gzip
+	php_server {
+	    root /app/public
+	    worker {
+		    match *
+    		file /app/worker.php
+        }
+	}
+}
 ```
 
-or, if you prefer [standalone binaries](https://frankenphp.dev/docs/embed/):
+For development it would be `docker/dev/Caddyfile`:
 
-```sh
-frankenphp php-server --worker /app/path/to/your/worker.php
+```
+# Development mode config
+# https://frankenphp.dev/docs/config
+# https://caddyserver.com/docs/caddyfile
+
+{
+	skip_install_trust
+
+	frankenphp {
+
+	}
+}
+
+{$SERVER_NAME::80} {
+	encode zstd br gzip
+	php_server {
+	    root /app/public
+	    worker {
+		    match *
+    		file /app/worker.php
+    		watch /app/**/*.php
+        }
+	}
+}
 ```
 
-You can add `--watch="/path/to/your/app/**/*.php"` to make the worker restart on source code changes.
+Development configuration has `watch` directive that makes FrankenPHP to reload changes when `.php` files are edited so you don't have to restart it manually.
+
+Feel free to delete `public/index.php` and remove `yiisoft/yii-runner-http` from your `composer.json`. These are used
+for classic non-worker mode only.
+
+Don't forget to rebuild images with new configuration files using `make build`.
 
 ### Additional configuration
 
@@ -104,6 +177,19 @@ recursive merge parameters.
 
 `$nestedEventsGroups` — configuration group names that are included in events' configuration group. This is needed for
 reverse and recursive merge events' configurations.
+
+`$configModifiers` — [configuration modifiers](https://github.com/yiisoft/config#configuration-modifiers).
+
+`$configDirectory` — the relative path from `$rootPath` to the configuration storage location.
+
+`$vendorDirectory` — the relative path from `$rootPath` to the vendor directory.
+
+`$configMergePlanFile` — the relative path from `$configDirectory` to merge plan.
+
+`$temporaryErrorHandler` — a temporary error handler that is needed to handle creating of configuration and container 
+instances.
+
+`$emitter` — an emitter to send the response.
 
 #### Immutable setters
 
@@ -175,7 +261,7 @@ that. You may also check out other [Yii Community Resources](https://www.yiifram
 
 ## License
 
-The Yii FrankenPHP Runner is free software. It is released under the terms of the BSD License.
+The Yii FrankenPHP worker Runner is free software. It is released under the terms of the BSD License.
 Please see [`LICENSE`](./LICENSE.md) for more information.
 
 Maintained by [Yii Software](https://www.yiiframework.com/).

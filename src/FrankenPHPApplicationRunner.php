@@ -12,6 +12,7 @@ use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Log\NullLogger;
 use Throwable;
 use Yiisoft\Definitions\Exception\CircularReferenceException;
 use Yiisoft\Definitions\Exception\InvalidConfigException;
@@ -21,8 +22,6 @@ use Yiisoft\Di\StateResetter;
 use Yiisoft\ErrorHandler\ErrorHandler;
 use Yiisoft\ErrorHandler\Middleware\ErrorCatcher;
 use Yiisoft\ErrorHandler\Renderer\HtmlRenderer;
-use Yiisoft\Log\Logger;
-use Yiisoft\Log\StreamTarget;
 use Yiisoft\PsrEmitter\EmitterInterface;
 use Yiisoft\PsrEmitter\FakeEmitter;
 use Yiisoft\PsrEmitter\HeadersHaveBeenSentException;
@@ -118,21 +117,6 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
             $vendorDirectory,
             $configMergePlanFile,
         );
-    }
-
-    /**
-     * Returns a new instance with the specified temporary error handler instance {@see ErrorHandler}.
-     *
-     * A temporary error handler is needed to handle the creation of configuration and container instances,
-     * then the error handler configured in your application configuration will be used.
-     *
-     * @param ErrorHandler $temporaryErrorHandler The temporary error handler instance.
-     */
-    public function withTemporaryErrorHandler(ErrorHandler $temporaryErrorHandler): self
-    {
-        $new = clone $this;
-        $new->temporaryErrorHandler = $temporaryErrorHandler;
-        return $new;
     }
 
     /**
@@ -237,7 +221,7 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
     {
         return $this->temporaryErrorHandler ??
             new ErrorHandler(
-                $this->logger ?? new Logger([new StreamTarget('php://stdout')]),
+                new NullLogger(),
                 new HtmlRenderer(),
             );
     }

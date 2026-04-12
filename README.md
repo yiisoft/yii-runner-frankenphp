@@ -87,22 +87,22 @@ Then edit `Caddyfile`s. For production it would be `docker/Caddyfile`:
 # https://caddyserver.com/docs/caddyfile
 
 {
-	skip_install_trust
+    skip_install_trust
 
-	frankenphp {
+    frankenphp {
 
-	}
+    }
 }
 
 {$SERVER_NAME::80} {
-	encode zstd br gzip
-	php_server {
-	    root /app/public
-	    worker {
-		    match *
-    		file /app/worker.php
+    encode zstd br gzip
+    php_server {
+        root /app/public
+        worker {
+            match *
+            file /app/worker.php
         }
-	}
+    }
 }
 ```
 
@@ -114,23 +114,23 @@ For development it would be `docker/dev/Caddyfile`:
 # https://caddyserver.com/docs/caddyfile
 
 {
-	skip_install_trust
+    skip_install_trust
 
-	frankenphp {
+    frankenphp {
 
-	}
+    }
 }
 
 {$SERVER_NAME::80} {
-	encode zstd br gzip
-	php_server {
-	    root /app/public
-	    worker {
-		    match *
-    		file /app/worker.php
-    		watch /app/**/*.php
+    encode zstd br gzip
+    php_server {
+        root /app/public
+        worker {
+            match *
+            file /app/worker.php
+            watch /app/**/*.php
         }
-	}
+    }
 }
 ```
 

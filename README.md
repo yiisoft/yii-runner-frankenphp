@@ -134,7 +134,7 @@ In addition to the error handler that is defined in the container, the runner us
 A temporary error handler is needed to handle the creation of configuration and container instances,
 then the error handler configured in your application configuration will be used.
 
-By default, the temporary error handler uses HTML renderer and logging to a file. You can override this as follows:
+By default, the temporary error handler uses HTML renderer and logs to stdout. You can override this as follows:
 
 ```php
 /**
@@ -145,6 +145,19 @@ By default, the temporary error handler uses HTML renderer and logging to a file
 
 $runner = $runner->withTemporaryErrorHandler(
     new Yiisoft\ErrorHandler\ErrorHandler($logger, $renderer),
+);
+```
+
+The built-in default is equivalent to:
+
+```php
+$runner = $runner->withTemporaryErrorHandler(
+    new Yiisoft\ErrorHandler\ErrorHandler(
+        new Yiisoft\Log\Logger([
+            new Yiisoft\Log\StreamTarget('php://stdout'),
+        ]),
+        new Yiisoft\ErrorHandler\Renderer\HtmlRenderer(),
+    ),
 );
 ```
 

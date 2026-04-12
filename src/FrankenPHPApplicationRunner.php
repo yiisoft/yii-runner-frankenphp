@@ -12,7 +12,6 @@ use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use Psr\Log\NullLogger;
 use Throwable;
 use Yiisoft\Definitions\Exception\CircularReferenceException;
 use Yiisoft\Definitions\Exception\InvalidConfigException;
@@ -22,6 +21,8 @@ use Yiisoft\Di\StateResetter;
 use Yiisoft\ErrorHandler\ErrorHandler;
 use Yiisoft\ErrorHandler\Middleware\ErrorCatcher;
 use Yiisoft\ErrorHandler\Renderer\HtmlRenderer;
+use Yiisoft\Log\Logger;
+use Yiisoft\Log\StreamTarget;
 use Yiisoft\PsrEmitter\EmitterInterface;
 use Yiisoft\PsrEmitter\FakeEmitter;
 use Yiisoft\PsrEmitter\HeadersHaveBeenSentException;
@@ -236,7 +237,7 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
     {
         return $this->temporaryErrorHandler ??
             new ErrorHandler(
-                $this->logger ?? new NullLogger(),
+                $this->logger ?? new Logger([new StreamTarget('php://stdout')]),
                 new HtmlRenderer(),
             );
     }

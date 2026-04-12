@@ -27,7 +27,7 @@
         }
     ],
     "require": {
-        "php": "8.1 - 8.4",
+        "php": "8.1 - 8.5",
         "ext-frankenphp": "*",
         "psr/container": "^2.0",
         "psr/http-factory": "^1.0",
@@ -39,7 +39,6 @@
         "yiisoft/error-handler": "^4.0",
         "yiisoft/http": "^1.2",
         "yiisoft/log": "^2.0",
-        "yiisoft/log-target-file": "^3.0",
         "yiisoft/psr-emitter": "^1.0",
         "yiisoft/yii-http": "^1.0",
         "yiisoft/yii-runner": "^2.0"

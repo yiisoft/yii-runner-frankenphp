@@ -22,12 +22,9 @@ use Psr\Http\Server\RequestHandlerInterface;
 use Psr\Log\LoggerInterface;
 use Yiisoft\Definitions\DynamicReference;
 use Yiisoft\Definitions\Reference;
-use Yiisoft\ErrorHandler\ErrorHandler;
+use Yiisoft\ErrorHandler\Factory\ThrowableResponseFactory;
 use Yiisoft\ErrorHandler\Renderer\PlainTextRenderer;
-use Yiisoft\ErrorHandler\RendererProvider\ContentTypeRendererProvider;
-use Yiisoft\ErrorHandler\RendererProvider\RendererProviderInterface;
 use Yiisoft\ErrorHandler\ThrowableRendererInterface;
-use Yiisoft\ErrorHandler\ThrowableResponseFactory;
 use Yiisoft\ErrorHandler\ThrowableResponseFactoryInterface;
 use Yiisoft\Middleware\Dispatcher\MiddlewareDispatcher;
 use Yiisoft\Test\Support\EventDispatcher\SimpleEventDispatcher;
@@ -45,32 +42,29 @@ return [
     UriFactoryInterface::class => UriFactory::class,
     UploadedFileFactoryInterface::class => UploadedFileFactory::class,
 
-    ThrowableResponseFactoryInterface::class => ThrowableResponseFactory::class,
-    RendererProviderInterface::class => ContentTypeRendererProvider::class,
-
-    ErrorHandler::class => [
-        'reset' => function () {
-            /** @var ErrorHandler $this */
-            $this->debug(false);
-        },
+    ThrowableResponseFactoryInterface::class => [
+        'class' => ThrowableResponseFactory::class,
+        'forceContentType()' => ['text/plain'],
     ],
+
+    'applicationMiddleware' => new class () implements MiddlewareInterface {
+        public function process(
+            ServerRequestInterface $request,
+            RequestHandlerInterface $handler
+        ): ResponseInterface {
+            return (new Response())->withBody((new StreamFactory())->createStream('OK'));
+        }
+    },
 
     Application::class => [
         '__construct()' => [
-            'dispatcher' => DynamicReference::to(static function (ContainerInterface $container) {
-                return $container
+            'dispatcher' => DynamicReference::to(
+                static fn(ContainerInterface $container) => $container
                     ->get(MiddlewareDispatcher::class)
                     ->withMiddlewares([
-                        static fn () => new class () implements MiddlewareInterface {
-                            public function process(
-                                ServerRequestInterface $request,
-                                RequestHandlerInterface $handler
-                            ): ResponseInterface {
-                                return (new Response())->withBody((new StreamFactory())->createStream('OK'));
-                            }
-                        },
-                    ]);
-            }),
+                        static fn(ContainerInterface $container) => $container->get('applicationMiddleware'),
+                    ]),
+            ),
             'fallbackHandler' => Reference::to(NotFoundHandler::class),
         ],
     ],

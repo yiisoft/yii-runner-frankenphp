@@ -3,5 +3,5 @@
 declare(strict_types=1);
 
 return [
-    stdClass::class => ['not-callback'],
+    'age' => 22,
 ];

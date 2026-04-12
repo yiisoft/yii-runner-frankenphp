@@ -5,14 +5,9 @@ declare(strict_types=1);
 // Do not edit. Content will be replaced.
 return [
     '/' => [
-        'params' => [
-            '/' => [
-                'params.php',
-            ],
-        ],
         'params-web' => [
             '/' => [
-                'params.php',
+                'params-web.php',
             ],
         ],
         'di-web' => [
@@ -23,11 +18,6 @@ return [
         'events-web' => [
             '/' => [
                 'events-web.php',
-            ],
-        ],
-        'events-fail' => [
-            '/' => [
-                'events-fail.php',
             ],
         ],
         'di-providers-web' => [
@@ -43,6 +33,34 @@ return [
         'bootstrap-web' => [
             '/' => [
                 'bootstrap-web.php',
+            ],
+        ],
+    ],
+    'content-length-with-transfer-encoding' => [
+        'di-web' => [
+            '/' => [
+                'di-web-content-length-with-transfer-encoding.php',
+            ],
+        ],
+    ],
+    'do-not-modify-exists-content-length' => [
+        'di-web' => [
+            '/' => [
+                'di-web-do-not-modify-exists-content-length.php',
+            ],
+        ],
+    ],
+    'do-not-add-content-middleware-with-continue-status' => [
+        'di-web' => [
+            '/' => [
+                'di-web-do-not-add-content-middleware-with-continue-status.php',
+            ],
+        ],
+    ],
+    'run-without-emit-with-request' => [
+        'di-web' => [
+            '/' => [
+                'di-web-run-without-emit-with-request.php',
             ],
         ],
     ],

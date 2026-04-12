@@ -67,8 +67,9 @@
     "config": {
         "sort-packages": true,
         "allow-plugins": {
+            "composer/package-versions-deprecated": true,
             "infection/extension-installer": true,
-            "composer/package-versions-deprecated": true
+            "yiisoft/config": true
         }
     },
     "scripts": {

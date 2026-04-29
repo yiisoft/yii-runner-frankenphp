@@ -12,7 +12,6 @@ use Psr\Http\Message\UriFactoryInterface;
 use Psr\Http\Message\UriInterface;
 use RuntimeException;
 
-use function explode;
 use function fopen;
 use function function_exists;
 use function getallheaders;
@@ -20,6 +19,7 @@ use function is_array;
 use function preg_match;
 use function str_replace;
 use function str_starts_with;
+use function strpos;
 use function strtolower;
 use function substr;
 use function ucwords;
@@ -133,7 +133,9 @@ final class RequestFactory
         }
 
         if (isset($_SERVER['REQUEST_URI'])) {
-            $uri = $uri->withPath(explode('?', $_SERVER['REQUEST_URI'], 2)[0]);
+            $requestUri = $_SERVER['REQUEST_URI'];
+            $pos = strpos($requestUri, '?');
+            $uri = $uri->withPath($pos === false ? $requestUri : substr($requestUri, 0, $pos));
         }
 
         if (isset($_SERVER['QUERY_STRING'])) {

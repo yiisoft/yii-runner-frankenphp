@@ -36,8 +36,7 @@ final class RequestFactory
         private readonly UriFactoryInterface $uriFactory,
         private readonly UploadedFileFactoryInterface $uploadedFileFactory,
         private readonly StreamFactoryInterface $streamFactory,
-    ) {
-    }
+    ) {}
 
     /**
      * Creates an instance of a server request from custom parameters.
@@ -73,7 +72,7 @@ final class RequestFactory
         $body ??= fopen('php://input', 'rb');
         if ($body !== false) {
             $request = $request->withBody(
-                $this->streamFactory->createStreamFromResource($body)
+                $this->streamFactory->createStreamFromResource($body),
             );
         }
 
@@ -204,7 +203,7 @@ final class RequestFactory
         mixed $tempNames,
         mixed $types,
         mixed $sizes,
-        mixed $errors
+        mixed $errors,
     ): void {
         if (is_array($names)) {
             /** @var array|string $name */
@@ -235,7 +234,7 @@ final class RequestFactory
             (int) $sizes,
             (int) $errors,
             $names,
-            $types
+            $types,
         );
     }
 }

@@ -222,11 +222,11 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
         if ($maxRequests > 0) {
             for (
                 $requestCount = 0;
-                $requestCount < $maxRequests && \frankenphp_handle_request($handler);
+                $requestCount < $maxRequests && frankenphp_handle_request($handler);
                 ++$requestCount
             );
         } else {
-            while (\frankenphp_handle_request($handler));
+            while (frankenphp_handle_request($handler));
         }
 
         $application->shutdown();

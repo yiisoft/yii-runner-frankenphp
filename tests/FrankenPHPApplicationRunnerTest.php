@@ -70,14 +70,14 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
     public static function setUpBeforeClass(): void
     {
         if (!function_exists('frankenphp_handle_request')) {
-            eval(<<<'PHP'
-namespace {
-    function frankenphp_handle_request(callable $handler): bool
-    {
-        return \Yiisoft\Yii\Runner\FrankenPHP\Tests\FrankenPHPApplicationRunnerTest::handleFrankenPhpRequest($handler);
-    }
-}
-PHP);
+            eval(<<<'PHP_WRAP'
+            namespace {
+                function frankenphp_handle_request(callable $handler): bool
+                {
+                    return \Yiisoft\Yii\Runner\FrankenPHP\Tests\FrankenPHPApplicationRunnerTest::handleFrankenPhpRequest($handler);
+                }
+            }
+            PHP_WRAP);
         }
     }
 

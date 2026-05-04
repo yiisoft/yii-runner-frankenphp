@@ -28,14 +28,14 @@ final class RequestFactoryTest extends TestCase
     public static function setUpBeforeClass(): void
     {
         if (!function_exists('getallheaders')) {
-            eval(<<<'PHP'
-namespace {
-    function getallheaders(): array|false
-    {
-        return \Yiisoft\Yii\Runner\FrankenPHP\Tests\RequestFactory\RequestFactoryTest::getAllHeadersStubResult();
-    }
-}
-PHP);
+            eval(<<<'PHP_WRAP'
+            namespace {
+                function getallheaders(): array|false
+                {
+                    return \Yiisoft\Yii\Runner\FrankenPHP\Tests\RequestFactory\RequestFactoryTest::getAllHeadersStubResult();
+                }
+            }
+            PHP_WRAP);
         }
     }
 

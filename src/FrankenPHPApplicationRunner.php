@@ -210,7 +210,7 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
             return true;
         };
 
-        $isInWorkerMode = function_exists('\frankenphp_handle_request');
+        $isInWorkerMode = function_exists('frankenphp_handle_request');
 
         if (!$isInWorkerMode) {
             $handler();

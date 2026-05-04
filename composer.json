@@ -44,13 +44,15 @@
         "yiisoft/yii-runner": "^2.2"
     },
     "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.95.1",
         "httpsoft/http-message": "^1.0",
         "maglnet/composer-require-checker": "^4.2",
         "phpunit/phpunit": "^10.3",
-        "rector/rector": "^2.0.3",
+        "rector/rector": "^2.4.2",
         "roave/infection-static-analysis-plugin": "^1.35",
         "spatie/phpunit-watcher": "^1.23",
         "vimeo/psalm": "^5.22 || ^6.1",
+        "yiisoft/code-style": "^1.0",
         "yiisoft/middleware-dispatcher": "^5.0",
         "yiisoft/test-support": "^3.0"
     },

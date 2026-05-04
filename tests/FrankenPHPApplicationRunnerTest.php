@@ -55,9 +55,14 @@ use Yiisoft\Yii\Http\Event\ApplicationStartup;
 use Yiisoft\Yii\Http\Event\BeforeRequest;
 use Yiisoft\Yii\Http\Handler\NotFoundHandler;
 use Yiisoft\Yii\Runner\FrankenPHP\FrankenPHPApplicationRunner;
+use Yiisoft\Yii\Runner\ApplicationRunner;
+
+use Throwable;
 
 use function PHPUnit\Framework\assertInstanceOf;
 use function PHPUnit\Framework\assertSame;
+use function array_key_exists;
+use function function_exists;
 
 final class FrankenPHPApplicationRunnerTest extends TestCase
 {
@@ -70,22 +75,15 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
     public static function setUpBeforeClass(): void
     {
         if (!function_exists('frankenphp_handle_request')) {
-            eval(<<<'PHP'
-namespace {
-    function frankenphp_handle_request(callable $handler): bool
-    {
-        return \Yiisoft\Yii\Runner\FrankenPHP\Tests\FrankenPHPApplicationRunnerTest::handleFrankenPhpRequest($handler);
-    }
-}
-PHP);
+            eval(<<<'PHP_WRAP'
+            namespace {
+                function frankenphp_handle_request(callable $handler): bool
+                {
+                    return \Yiisoft\Yii\Runner\FrankenPHP\Tests\FrankenPHPApplicationRunnerTest::handleFrankenPhpRequest($handler);
+                }
+            }
+            PHP_WRAP);
         }
-    }
-
-    public static function handleFrankenPhpRequest(callable $handler): bool
-    {
-        self::$frankenphpHandleRequestCalls++;
-
-        return $handler() && self::$frankenphpHandleRequestCalls < self::$frankenphpHandleRequestKeepRunningUntil;
     }
 
     public function setUp(): void
@@ -98,13 +96,20 @@ PHP);
         self::$bootstrapExecuted = false;
         $this->runner = new FrankenPHPApplicationRunner(
             rootPath: __DIR__ . '/Support',
-            debug: true
+            debug: true,
         );
     }
 
     protected function tearDown(): void
     {
         parent::tearDown();
+    }
+
+    public static function handleFrankenPhpRequest(callable $handler): bool
+    {
+        self::$frankenphpHandleRequestCalls++;
+
+        return $handler() && self::$frankenphpHandleRequestCalls < self::$frankenphpHandleRequestKeepRunningUntil;
     }
 
     public function testRun(): void
@@ -131,15 +136,15 @@ PHP);
     {
         $runner = new FrankenPHPApplicationRunner(__DIR__ . '/Support');
 
-        $this->assertFalse($this->getPropertyValue($runner, 'debug', \Yiisoft\Yii\Runner\ApplicationRunner::class));
-        $this->assertFalse($this->getPropertyValue($runner, 'checkEvents', \Yiisoft\Yii\Runner\ApplicationRunner::class));
+        $this->assertFalse($this->getPropertyValue($runner, 'debug', ApplicationRunner::class));
+        $this->assertFalse($this->getPropertyValue($runner, 'checkEvents', ApplicationRunner::class));
         $this->assertSame(
             ['params'],
-            $this->getPropertyValue($runner, 'nestedParamsGroups', \Yiisoft\Yii\Runner\ApplicationRunner::class),
+            $this->getPropertyValue($runner, 'nestedParamsGroups', ApplicationRunner::class),
         );
         $this->assertSame(
             ['events'],
-            $this->getPropertyValue($runner, 'nestedEventsGroups', \Yiisoft\Yii\Runner\ApplicationRunner::class),
+            $this->getPropertyValue($runner, 'nestedEventsGroups', ApplicationRunner::class),
         );
     }
 
@@ -396,8 +401,7 @@ PHP);
     private function createContainer(
         bool $throwException = false,
         bool $throwOnErrorResponseCreation = false,
-    ): ContainerInterface
-    {
+    ): ContainerInterface {
         $containerConfig = ContainerConfig::create()
             ->withDefinitions($this->createDefinitions($throwException, $throwOnErrorResponseCreation));
         return new Container($containerConfig);
@@ -411,9 +415,7 @@ PHP);
     private function createStubConfig(array $configurations): ConfigInterface
     {
         return new class ($configurations) implements ConfigInterface {
-            public function __construct(private readonly array $configurations)
-            {
-            }
+            public function __construct(private readonly array $configurations) {}
 
             public function has(string $group): bool
             {
@@ -440,10 +442,10 @@ PHP);
             UploadedFileFactoryInterface::class => UploadedFileFactory::class,
 
             ThrowableResponseFactoryInterface::class => $throwOnErrorResponseCreation
-                ? static fn() => new class () implements ThrowableResponseFactoryInterface {
+                ? static fn() => new class implements ThrowableResponseFactoryInterface {
                     public function create(
-                        \Throwable $throwable,
-                        ServerRequestInterface $request
+                        Throwable $throwable,
+                        ServerRequestInterface $request,
                     ): ResponseInterface {
                         throw new Exception('Failure while creating error response', previous: $throwable);
                     }
@@ -461,13 +463,11 @@ PHP);
                                 ->get(MiddlewareDispatcher::class)
                                 ->withMiddlewares([
                                     static fn() => new class ($throwException) implements MiddlewareInterface {
-                                        public function __construct(private bool $throwException)
-                                        {
-                                        }
+                                        public function __construct(private bool $throwException) {}
 
                                         public function process(
                                             ServerRequestInterface $request,
-                                            RequestHandlerInterface $handler
+                                            RequestHandlerInterface $handler,
                                         ): ResponseInterface {
                                             if ($this->throwException) {
                                                 throw new Exception('Failure');
@@ -496,7 +496,7 @@ PHP);
             ThrowableRendererInterface::class => PlainTextRenderer::class,
             UriFactoryInterface::class => UriFactory::class,
             UploadedFileFactoryInterface::class => UploadedFileFactory::class,
-            'requestCounter' => static fn() => new class () {
+            'requestCounter' => static fn() => new class {
                 public int $value = 0;
             },
 
@@ -517,20 +517,18 @@ PHP);
             },
 
             'applicationMiddleware' => static fn(ContainerInterface $container) => new class (
-                $container->get('requestCounter')
+                $container->get('requestCounter'),
             ) implements MiddlewareInterface {
-                public function __construct(private readonly object $counter)
-                {
-                }
+                public function __construct(private readonly object $counter) {}
 
                 public function process(
                     ServerRequestInterface $request,
-                    RequestHandlerInterface $handler
+                    RequestHandlerInterface $handler,
                 ): ResponseInterface {
                     $this->counter->value++;
 
                     return (new Response())->withBody(
-                        (new StreamFactory())->createStream((string) $this->counter->value)
+                        (new StreamFactory())->createStream((string) $this->counter->value),
                     );
                 }
             },

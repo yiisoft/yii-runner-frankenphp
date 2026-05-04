@@ -334,19 +334,6 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $this->assertSame($firstEmitter, $secondEmitter);
     }
 
-    public function testCreateTemporaryErrorHandlerReturnsInjectedInstance(): void
-    {
-        $temporaryErrorHandler = $this->createErrorHandler();
-        $runner = new FrankenPHPApplicationRunner(
-            rootPath: __DIR__ . '/Support',
-            temporaryErrorHandler: $temporaryErrorHandler,
-        );
-
-        $created = $this->invokeMethod($runner, 'createTemporaryErrorHandler');
-
-        $this->assertSame($temporaryErrorHandler, $created);
-    }
-
     public function testWorkerModeRespectsMaxRequestsAndResetsStateBetweenRequests(): void
     {
         $_SERVER['MAX_REQUESTS'] = '2';

@@ -30,6 +30,7 @@ use Yiisoft\Yii\Http\Handler\ThrowableHandler;
 use Yiisoft\Yii\Runner\ApplicationRunner;
 
 use function gc_collect_cycles;
+use function frankenphp_handle_request;
 use function function_exists;
 use function ignore_user_abort;
 use function microtime;

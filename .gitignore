@@ -35,3 +35,6 @@ rr.exe
 
 # config merge plan
 .merge-plan.php
+
+# AI local settings
+/.claude

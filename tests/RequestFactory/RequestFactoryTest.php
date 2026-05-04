@@ -16,6 +16,7 @@ use RuntimeException;
 use Yiisoft\Yii\Runner\FrankenPHP\RequestFactory;
 
 use function fopen;
+use function function_exists;
 
 final class RequestFactoryTest extends TestCase
 {
@@ -39,11 +40,6 @@ final class RequestFactoryTest extends TestCase
         }
     }
 
-    public static function getAllHeadersStubResult(): array|false
-    {
-        return self::$getAllHeadersResult;
-    }
-
     protected function setUp(): void
     {
         $this->globalServer = $_SERVER;
@@ -57,6 +53,11 @@ final class RequestFactoryTest extends TestCase
         $_SERVER = $this->globalServer;
         $_POST = $this->globalPost;
         $_FILES = $this->globalFiles;
+    }
+
+    public static function getAllHeadersStubResult(): array|false
+    {
+        return self::$getAllHeadersResult;
     }
 
     public function testUploadedFiles(): void

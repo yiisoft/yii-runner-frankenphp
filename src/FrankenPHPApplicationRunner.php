@@ -43,6 +43,8 @@ ignore_user_abort(true);
  */
 final class FrankenPHPApplicationRunner extends ApplicationRunner
 {
+    private readonly ErrorHandler $temporaryErrorHandler;
+    private readonly EmitterInterface $emitter;
     private ?FakeEmitter $fakeEmitter = null;
 
     /**
@@ -65,10 +67,10 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
      * @param string $configDirectory The relative path from {@see $rootPath} to the configuration storage location.
      * @param string $vendorDirectory The relative path from {@see $rootPath} to the vendor directory.
      * @param string $configMergePlanFile The relative path from {@see $configDirectory} to merge plan.
-     * @param ErrorHandler $temporaryErrorHandler The temporary error handler instance that used to handle
+     * @param ErrorHandler|null $temporaryErrorHandler The temporary error handler instance that used to handle
      * the creation of configuration and container instances, then the error handler configured in your application
      * configuration will be used.
-     * @param EmitterInterface $emitter The emitter instance to send the response with. By default, it uses
+     * @param EmitterInterface|null $emitter The emitter instance to send the response with. By default, it uses
      * {@see SapiEmitter}.
      *
      * @psalm-param list<string> $nestedParamsGroups
@@ -93,9 +95,12 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
         string $configDirectory = 'config',
         string $vendorDirectory = 'vendor',
         string $configMergePlanFile = '.merge-plan.php',
-        private readonly ErrorHandler $temporaryErrorHandler = new ErrorHandler(new NullLogger(), new HtmlRenderer()),
-        private readonly EmitterInterface $emitter = new SapiEmitter(),
+        ?ErrorHandler $temporaryErrorHandler = null,
+        ?EmitterInterface $emitter = null,
     ) {
+        $this->temporaryErrorHandler = $temporaryErrorHandler ?? new ErrorHandler(new NullLogger(), new HtmlRenderer());
+        $this->emitter = $emitter ?? new SapiEmitter();
+
         parent::__construct(
             $rootPath,
             $debug,
@@ -187,8 +192,7 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
         ): bool {
             $startTime = microtime(true);
 
-            $request ??= $requestFactory
-                ->create()
+            $request = ($request ?? $requestFactory->create())
                 ->withAttribute('applicationStartTime', $startTime);
 
             try {

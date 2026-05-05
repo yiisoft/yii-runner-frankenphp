@@ -29,9 +29,11 @@ use Yiisoft\Yii\Http\Application;
 use Yiisoft\Yii\Http\Handler\ThrowableHandler;
 use Yiisoft\Yii\Runner\ApplicationRunner;
 
-use function frankenphp_handle_request;
 use function gc_collect_cycles;
+use function frankenphp_handle_request;
 use function function_exists;
+use function ignore_user_abort;
+use function microtime;
 
 // Prevent worker script termination when a client connection is interrupted.
 ignore_user_abort(true);
@@ -41,9 +43,9 @@ ignore_user_abort(true);
  */
 final class FrankenPHPApplicationRunner extends ApplicationRunner
 {
+    private readonly ErrorHandler $temporaryErrorHandler;
     private readonly EmitterInterface $emitter;
     private ?FakeEmitter $fakeEmitter = null;
-    private bool $isInWorkerMode;
 
     /**
      * @param string $rootPath The absolute path to the project root.
@@ -93,12 +95,11 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
         string $configDirectory = 'config',
         string $vendorDirectory = 'vendor',
         string $configMergePlanFile = '.merge-plan.php',
-        private readonly ?ErrorHandler $temporaryErrorHandler = null,
+        ?ErrorHandler $temporaryErrorHandler = null,
         ?EmitterInterface $emitter = null,
     ) {
+        $this->temporaryErrorHandler = $temporaryErrorHandler ?? new ErrorHandler(new NullLogger(), new HtmlRenderer());
         $this->emitter = $emitter ?? new SapiEmitter();
-
-        $this->isInWorkerMode = function_exists('frankenphp_handle_request');
 
         parent::__construct(
             $rootPath,
@@ -158,15 +159,14 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
     private function runInternal(EmitterInterface $emitter, ?ServerRequestInterface $request = null): void
     {
         // Register temporary error handler to catch error while the container is building.
-        $temporaryErrorHandler = $this->createTemporaryErrorHandler();
-        $this->registerErrorHandler($temporaryErrorHandler);
+        $this->registerErrorHandler($this->temporaryErrorHandler);
 
         $container = $this->getContainer();
 
         // Register error handler with real container-configured dependencies.
         /** @var ErrorHandler $actualErrorHandler */
         $actualErrorHandler = $container->get(ErrorHandler::class);
-        $this->registerErrorHandler($actualErrorHandler, $temporaryErrorHandler);
+        $this->registerErrorHandler($actualErrorHandler, $this->temporaryErrorHandler);
 
         $this->runBootstrap();
         $this->checkEvents();
@@ -177,54 +177,63 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
 
         /** @var RequestFactory $requestFactory */
         $requestFactory = $container->get(RequestFactory::class);
+        $errorCatcher = null;
 
-        $handler = function () use ($application, $container, $requestFactory, $emitter, $request): bool {
+        $handler = function () use (
+            $request,
+            $requestFactory,
+            $application,
+            $container,
+            $emitter,
+            &$errorCatcher,
+        ): bool {
             $startTime = microtime(true);
 
-            if ($request === null) {
-                $request = $requestFactory->create();
-            }
-
-            $request = $request->withAttribute('applicationStartTime', $startTime);
+            $request = ($request ?? $requestFactory->create())
+                ->withAttribute('applicationStartTime', $startTime);
 
             try {
                 $response = $application->handle($request);
             } catch (Throwable $throwable) {
                 $handler = new ThrowableHandler($throwable);
+                $errorCatcher ??= $container->get(ErrorCatcher::class);
                 /** @var ErrorCatcher $errorCatcher */
-                $errorCatcher = $container->get(ErrorCatcher::class);
                 $response = $errorCatcher->process($request, $handler);
             }
 
             $emitter->emit($response);
-            $this->afterRespond($application, $response);
+            $application->afterEmit($response);
+
+            // We should reset the state of such services at every request.
+            /** @var StateResetter $stateResetter */
+            $stateResetter = $container->get(StateResetter::class);
+            $stateResetter->reset();
+            gc_collect_cycles();
+
             return true;
         };
 
+        $isInWorkerMode = function_exists('frankenphp_handle_request');
+
+        if (!$isInWorkerMode) {
+            $handler();
+            $application->shutdown();
+            return;
+        }
+
         $maxRequests = (int) ($_SERVER['MAX_REQUESTS'] ?? 0);
 
-        for ($requestCount = 0; !$maxRequests || $requestCount < $maxRequests; ++$requestCount) {
-            if (!$this->isInWorkerMode) {
-                $handler();
-                break;
-            }
-
-            $keepRunning = frankenphp_handle_request($handler);
-            if (!$keepRunning) {
-                break;
-            }
+        if ($maxRequests > 0) {
+            for (
+                $requestCount = 0;
+                $requestCount < $maxRequests && frankenphp_handle_request($handler);
+                ++$requestCount
+            );
+        } else {
+            while (frankenphp_handle_request($handler));
         }
 
         $application->shutdown();
-    }
-
-    private function createTemporaryErrorHandler(): ErrorHandler
-    {
-        return $this->temporaryErrorHandler
-            ?? new ErrorHandler(
-                new NullLogger(),
-                new HtmlRenderer(),
-            );
     }
 
     /**
@@ -239,17 +248,5 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
         }
 
         $registered->register();
-    }
-
-    private function afterRespond(
-        Application $application,
-        ?ResponseInterface $response,
-    ): void {
-        $application->afterEmit($response);
-        /** @psalm-suppress MixedMethodCall */
-        $this->getContainer()
-            ->get(StateResetter::class)
-            ->reset(); // We should reset the state of such services every request.
-        gc_collect_cycles();
     }
 }

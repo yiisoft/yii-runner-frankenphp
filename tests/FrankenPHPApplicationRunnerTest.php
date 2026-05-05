@@ -68,7 +68,9 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
 {
     public static int $frankenphpHandleRequestCalls = 0;
     public static int $frankenphpHandleRequestKeepRunningUntil = 1;
+    public static array $frankenphpRequestServerParameters = [];
     public static bool $bootstrapExecuted = false;
+    private static array $frankenphpRequestServerParameterKeys = [];
 
     private FrankenPHPApplicationRunner $runner;
 
@@ -91,8 +93,14 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         parent::setUp();
 
         $_SERVER['REQUEST_METHOD'] = 'GET';
+        unset($_SERVER['MAX_REQUESTS']);
+        foreach (self::$frankenphpRequestServerParameterKeys as $key) {
+            unset($_SERVER[$key]);
+        }
         self::$frankenphpHandleRequestCalls = 0;
         self::$frankenphpHandleRequestKeepRunningUntil = 1;
+        self::$frankenphpRequestServerParameters = [];
+        self::$frankenphpRequestServerParameterKeys = [];
         self::$bootstrapExecuted = false;
         $this->runner = new FrankenPHPApplicationRunner(
             rootPath: __DIR__ . '/Support',
@@ -107,6 +115,16 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
 
     public static function handleFrankenPhpRequest(callable $handler): bool
     {
+        foreach (self::$frankenphpRequestServerParameterKeys as $key) {
+            unset($_SERVER[$key]);
+        }
+
+        self::$frankenphpRequestServerParameterKeys = [];
+        foreach (self::$frankenphpRequestServerParameters[self::$frankenphpHandleRequestCalls] ?? [] as $key => $value) {
+            $_SERVER[$key] = $value;
+            self::$frankenphpRequestServerParameterKeys[] = $key;
+        }
+
         self::$frankenphpHandleRequestCalls++;
 
         return $handler() && self::$frankenphpHandleRequestCalls < self::$frankenphpHandleRequestKeepRunningUntil;
@@ -334,19 +352,6 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $this->assertSame($firstEmitter, $secondEmitter);
     }
 
-    public function testCreateTemporaryErrorHandlerReturnsInjectedInstance(): void
-    {
-        $temporaryErrorHandler = $this->createErrorHandler();
-        $runner = new FrankenPHPApplicationRunner(
-            rootPath: __DIR__ . '/Support',
-            temporaryErrorHandler: $temporaryErrorHandler,
-        );
-
-        $created = $this->invokeMethod($runner, 'createTemporaryErrorHandler');
-
-        $this->assertSame($temporaryErrorHandler, $created);
-    }
-
     public function testWorkerModeRespectsMaxRequestsAndResetsStateBetweenRequests(): void
     {
         $_SERVER['MAX_REQUESTS'] = '2';
@@ -395,6 +400,30 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
 
         $runner->run();
 
+        $this->assertSame(2, self::$frankenphpHandleRequestCalls);
+    }
+
+    public function testWorkerModeDoesNotLeakAuthenticatedUserToNextRequest(): void
+    {
+        $_SERVER['MAX_REQUESTS'] = '2';
+        self::$frankenphpHandleRequestKeepRunningUntil = 5;
+        self::$frankenphpRequestServerParameters = [
+            ['HTTP_X_USER_ID' => 'alice'],
+            [],
+        ];
+
+        $emitter = new FakeEmitter();
+        $runner = (new FrankenPHPApplicationRunner(
+            rootPath: __DIR__ . '/Support',
+            debug: false,
+            emitter: $emitter,
+        ))->withContainer($this->createAuthenticatedUserWorkerModeContainer());
+
+        $runner->run();
+
+        $response = $emitter->getLastResponse();
+        assertInstanceOf(ResponseInterface::class, $response);
+        $this->assertSame('guest', (string) $response->getBody());
         $this->assertSame(2, self::$frankenphpHandleRequestCalls);
     }
 
@@ -550,6 +579,47 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         return new Container($containerConfig);
     }
 
+    private function createAuthenticatedUserWorkerModeContainer(): ContainerInterface
+    {
+        $containerConfig = ContainerConfig::create()->withDefinitions([
+            EventDispatcherInterface::class => SimpleEventDispatcher::class,
+            LoggerInterface::class => SimpleLogger::class,
+            ResponseFactoryInterface::class => ResponseFactory::class,
+            ServerRequestFactoryInterface::class => ServerRequestFactory::class,
+            StreamFactoryInterface::class => StreamFactory::class,
+            ThrowableRendererInterface::class => PlainTextRenderer::class,
+            UriFactoryInterface::class => UriFactory::class,
+            UploadedFileFactoryInterface::class => UploadedFileFactory::class,
+
+            ThrowableResponseFactoryInterface::class => [
+                'class' => ThrowableResponseFactory::class,
+                'forceContentType()' => ['text/plain'],
+            ],
+
+            CurrentUser::class => [
+                'class' => CurrentUser::class,
+                'reset' => function (): void {
+                    $this->logout();
+                },
+            ],
+
+            Application::class => [
+                '__construct()' => [
+                    'dispatcher' => DynamicReference::to(
+                        static fn(ContainerInterface $container) => $container
+                            ->get(MiddlewareDispatcher::class)
+                            ->withMiddlewares([
+                                CurrentUserMiddleware::class,
+                            ]),
+                    ),
+                    'fallbackHandler' => Reference::to(NotFoundHandler::class),
+                ],
+            ],
+        ]);
+
+        return new Container($containerConfig);
+    }
+
     private function createErrorHandler(): ErrorHandler
     {
         return new ErrorHandler(new SimpleLogger(), new PlainTextRenderer());
@@ -566,5 +636,44 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
     private function invokeMethod(object $object, string $method, array $arguments = []): mixed
     {
         return (new ReflectionMethod($object, $method))->invokeArgs($object, $arguments);
+    }
+}
+
+final class CurrentUser
+{
+    private ?string $id = null;
+
+    public function authenticate(string $id): void
+    {
+        $this->id = $id;
+    }
+
+    public function logout(): void
+    {
+        $this->id = null;
+    }
+
+    public function name(): string
+    {
+        return $this->id ?? 'guest';
+    }
+}
+
+final class CurrentUserMiddleware implements MiddlewareInterface
+{
+    public function __construct(private readonly CurrentUser $currentUser) {}
+
+    public function process(
+        ServerRequestInterface $request,
+        RequestHandlerInterface $handler,
+    ): ResponseInterface {
+        $userId = $request->getHeaderLine('X-User-Id');
+        if ($userId !== '') {
+            $this->currentUser->authenticate($userId);
+        }
+
+        return (new Response())->withBody(
+            (new StreamFactory())->createStream($this->currentUser->name()),
+        );
     }
 }

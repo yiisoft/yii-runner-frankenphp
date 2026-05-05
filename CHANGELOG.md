@@ -2,8 +2,9 @@
 
 ## 1.0.1 under development
 
-- Enh #6: Refactor RequestFactory (@Tigrov)
+- Enh #6: Refactor `RequestFactory` to improve performance (@Tigrov)
 - Enh #7: Apply PHP CS Fixer (@Tigrov)
+- Enh #8: Refactor `FrankenPHPApplicationRunner` to improve performance (@Tigrov)
 
 ## 1.0.0 April 12, 2026
 

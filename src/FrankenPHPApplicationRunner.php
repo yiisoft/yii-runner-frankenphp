@@ -177,8 +177,6 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
 
         /** @var RequestFactory $requestFactory */
         $requestFactory = $container->get(RequestFactory::class);
-        /** @var StateResetter $stateResetter */
-        $stateResetter = $container->get(StateResetter::class);
         $errorCatcher = null;
 
         $handler = function () use (
@@ -187,7 +185,6 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
             $application,
             $container,
             $emitter,
-            $stateResetter,
             &$errorCatcher,
         ): bool {
             $startTime = microtime(true);
@@ -208,6 +205,8 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
             $application->afterEmit($response);
 
             // We should reset the state of such services at every request.
+            /** @var StateResetter $stateResetter */
+            $stateResetter = $container->get(StateResetter::class);
             $stateResetter->reset();
             gc_collect_cycles();
 

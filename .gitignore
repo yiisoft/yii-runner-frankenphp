@@ -36,5 +36,8 @@ rr.exe
 # config merge plan
 .merge-plan.php
 
+# PHP CS Fixer
+/.php-cs-fixer.cache
+
 # AI local settings
 /.claude

@@ -258,6 +258,7 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $runner->run();
 
         $this->assertSame(2, self::$frankenphpHandleRequestCalls);
+        $this->expectOutputRegex('/^Exception with message "Failure while creating response stream"/');
     }
 
     public function testConfigMergePlanFile(): void

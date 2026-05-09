@@ -194,14 +194,15 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
 
             try {
                 $response = $application->handle($request);
+                $emitter->emit($response);
             } catch (Throwable $throwable) {
                 $handler = new ThrowableHandler($throwable);
                 $errorCatcher ??= $container->get(ErrorCatcher::class);
                 /** @var ErrorCatcher $errorCatcher */
                 $response = $errorCatcher->process($request, $handler);
+                $emitter->emit($response);
             }
 
-            $emitter->emit($response);
             $application->afterEmit($response);
 
             // We should reset the state of such services at every request.

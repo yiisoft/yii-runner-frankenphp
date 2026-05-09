@@ -57,4 +57,11 @@ return [
             ],
         ],
     ],
+    'view-response-with-error' => [
+        'di-web' => [
+            '/'  => [
+                'di-web-view-response-with-error.php',
+            ],
+        ],
+    ]
 ];

@@ -35,7 +35,6 @@ use Yiisoft\Definitions\Reference;
 use Yiisoft\Di\Container;
 use Yiisoft\Di\ContainerConfig;
 use Yiisoft\Di\StateResetter;
-use Yiisoft\ErrorHandler\ErrorHandler;
 use Yiisoft\ErrorHandler\Factory\ThrowableResponseFactory;
 use Yiisoft\ErrorHandler\Renderer\PlainTextRenderer;
 use Yiisoft\ErrorHandler\ThrowableRendererInterface;
@@ -244,6 +243,22 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         $this->expectExceptionMessage('Failure while creating error response');
 
         $runner->run();
+    }
+
+    public function testRunRethrowsWhenEmitterFails(): void
+    {
+        self::$frankenphpHandleRequestKeepRunningUntil = 2;
+
+        $runner = new FrankenPHPApplicationRunner(
+            rootPath: __DIR__ . '/Support',
+            environment: 'view-response-with-error',
+            debug: true,
+        );
+
+        $runner->run();
+
+        $this->assertSame(2, self::$frankenphpHandleRequestCalls);
+        $this->expectOutputRegex('/^Exception with message "Failure while creating response stream"/');
     }
 
     public function testConfigMergePlanFile(): void
@@ -618,11 +633,6 @@ final class FrankenPHPApplicationRunnerTest extends TestCase
         ]);
 
         return new Container($containerConfig);
-    }
-
-    private function createErrorHandler(): ErrorHandler
-    {
-        return new ErrorHandler(new SimpleLogger(), new PlainTextRenderer());
     }
 
     private function getPropertyValue(

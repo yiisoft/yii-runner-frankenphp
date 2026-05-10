@@ -75,6 +75,8 @@
         }
     },
     "scripts": {
+        "cs-fix": "php-cs-fixer fix",
+        "rector": "rector",
         "test": "phpunit --testdox",
         "test-watch": "phpunit-watcher watch"
     }

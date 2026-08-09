@@ -34,11 +34,8 @@
         "psr/http-factory": "^1.0",
         "psr/http-message": "^1.0 || ^2.0",
         "psr/log": "^3.0",
-        "yiisoft/config": "^1.1",
-        "yiisoft/definitions": "^1.0 || ^2.0 || ^3.0",
         "yiisoft/di": "^1.0",
         "yiisoft/error-handler": "^4.0",
-        "yiisoft/http": "^1.2",
         "yiisoft/psr-emitter": "^1.0",
         "yiisoft/yii-http": "^1.0",
         "yiisoft/yii-runner": "^2.2"
@@ -57,6 +54,9 @@
         "spatie/phpunit-watcher": "^1.23",
         "vimeo/psalm": "^5.22 || ^6.1",
         "yiisoft/code-style": "^1.0",
+        "yiisoft/config": "^1.1",
+        "yiisoft/definitions": "^3.0",
+        "yiisoft/http": "^1.2",
         "yiisoft/middleware-dispatcher": "^5.0",
         "yiisoft/test-support": "^3.0",
         "yiisoft/yii-event": "^2.2"

@@ -179,7 +179,7 @@ final class FrankenPHPApplicationRunner extends ApplicationRunner
         $requestFactory = $container->get(RequestFactory::class);
         $errorCatcher = null;
 
-        $handler = function () use (
+        $handler = static function () use (
             $request,
             $requestFactory,
             $application,
